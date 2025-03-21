@@ -38,6 +38,12 @@ const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 // Store active oscillators
 const activeOscillators = {};
 
+// Playback state
+let currentSong = null;
+let currentNoteIndex = 0;
+let playbackInterval = null;
+let isPlaying = false;
+
 // Function to create and play a note
 function playNote(frequency, key) {
     // If note is already playing, don't start a new one
@@ -69,6 +75,55 @@ function stopNote(key) {
         oscillator.stop(audioContext.currentTime + 0.1);
         delete activeOscillators[key];
     }
+}
+
+// Function to stop all notes
+function stopAllNotes() {
+    Object.keys(activeOscillators).forEach(key => stopNote(key));
+}
+
+// Function to play a song
+function playSong(songName) {
+    if (!SONGS[songName]) return;
+    
+    currentSong = SONGS[songName];
+    currentNoteIndex = 0;
+    isPlaying = true;
+    
+    // Stop any existing playback
+    stopPlayback();
+    
+    // Start playing the song
+    playbackInterval = setInterval(() => {
+        if (!isPlaying || currentNoteIndex >= currentSong.notes.length) {
+            stopPlayback();
+            return;
+        }
+        
+        const note = currentSong.notes[currentNoteIndex];
+        playNote(NOTES[note], note);
+        
+        // Highlight the key
+        const keyElement = document.querySelector(`[data-note="${note}"]`);
+        if (keyElement) {
+            keyElement.classList.add('active');
+            setTimeout(() => keyElement.classList.remove('active'), 100);
+        }
+        
+        currentNoteIndex++;
+    }, currentSong.tempo);
+}
+
+// Function to stop playback
+function stopPlayback() {
+    isPlaying = false;
+    if (playbackInterval) {
+        clearInterval(playbackInterval);
+        playbackInterval = null;
+    }
+    stopAllNotes();
+    currentSong = null;
+    currentNoteIndex = 0;
 }
 
 // Handle keyboard events
@@ -130,5 +185,39 @@ document.querySelectorAll('.white-key, .black-key').forEach(key => {
         const note = key.getAttribute('data-note');
         key.classList.remove('active');
         stopNote(note);
+    });
+});
+
+// Handle song selection and playback
+document.getElementById('playButton').addEventListener('click', () => {
+    const songSelect = document.getElementById('songSelect');
+    const selectedSong = songSelect.value;
+    if (selectedSong) {
+        playSong(selectedSong);
+    }
+});
+
+document.getElementById('stopButton').addEventListener('click', stopPlayback);
+
+// Handle song search
+document.getElementById('searchButton').addEventListener('click', () => {
+    const searchInput = document.getElementById('songSearch');
+    const searchTerm = searchInput.value.toLowerCase();
+    const searchResults = document.getElementById('searchResults');
+    searchResults.innerHTML = '';
+    
+    Object.keys(SONGS).forEach(songName => {
+        if (songName.toLowerCase().includes(searchTerm)) {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'search-result-item';
+            resultItem.textContent = songName;
+            resultItem.addEventListener('click', () => {
+                document.getElementById('songSelect').value = songName;
+                playSong(songName);
+                searchInput.value = '';
+                searchResults.innerHTML = '';
+            });
+            searchResults.appendChild(resultItem);
+        }
     });
 }); 

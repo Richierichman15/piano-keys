@@ -9,6 +9,11 @@
 <body>
     <div class="container">
         <h1>Virtual Piano</h1>
+        <div class="search-container">
+            <input type="text" id="songSearch" placeholder="Search for a song...">
+            <button id="searchButton">Search</button>
+        </div>
+        <div id="searchResults" class="search-results"></div>
         <div class="piano">
             <div class="white-key" data-note="C">C</div>
             <div class="black-key" data-note="C#">C#</div>
@@ -24,11 +29,23 @@
             <div class="white-key" data-note="B">B</div>
             <div class="white-key" data-note="C2">C</div>
         </div>
+        <div class="playback-controls">
+            <button id="playButton">Play</button>
+            <button id="stopButton">Stop</button>
+            <select id="songSelect">
+                <option value="">Select a song...</option>
+                <option value="Twinkle Twinkle Little Star">Twinkle Twinkle Little Star</option>
+                <option value="Happy Birthday">Happy Birthday</option>
+                <option value="Jingle Bells">Jingle Bells</option>
+                <option value="Mary Had a Little Lamb">Mary Had a Little Lamb</option>
+            </select>
+        </div>
         <div class="instructions">
             <p>Use your keyboard keys to play the piano!</p>
             <p>Keys: A-K for white keys, W,E,T,Y,U for black keys</p>
         </div>
     </div>
+    <script src="songs.js"></script>
     <script src="script.js"></script>
 </body>
 </html> 
