@@ -1,4 +1,5 @@
-const SONGS = {
+// Define songs database with note sequences and tempos
+window.SONGS = {
     "Twinkle Twinkle Little Star": {
         notes: ["C", "C", "G", "G", "A", "A", "G", "F", "F", "E", "E", "D", "D", "C"],
         tempo: 500 // milliseconds between notes

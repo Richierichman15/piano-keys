@@ -44,6 +44,12 @@ let currentNoteIndex = 0;
 let playbackInterval = null;
 let isPlaying = false;
 
+// Fallback if SONGS isn't defined
+if (typeof window.SONGS === 'undefined') {
+    window.SONGS = {};
+    console.warn('Songs database not found. Make sure songs.js is loaded properly.');
+}
+
 // Function to create and play a note
 function playNote(frequency, key) {
     // If note is already playing, don't start a new one
@@ -84,9 +90,13 @@ function stopAllNotes() {
 
 // Function to play a song
 function playSong(songName) {
-    if (!SONGS[songName]) return;
+    // Validate song exists and has required properties
+    if (!songName || !window.SONGS[songName] || !window.SONGS[songName].notes || !window.SONGS[songName].tempo) {
+        console.error('Invalid song:', songName);
+        return;
+    }
     
-    currentSong = SONGS[songName];
+    currentSong = window.SONGS[songName];
     currentNoteIndex = 0;
     isPlaying = true;
     
@@ -101,13 +111,15 @@ function playSong(songName) {
         }
         
         const note = currentSong.notes[currentNoteIndex];
-        playNote(NOTES[note], note);
-        
-        // Highlight the key
-        const keyElement = document.querySelector(`[data-note="${note}"]`);
-        if (keyElement) {
-            keyElement.classList.add('active');
-            setTimeout(() => keyElement.classList.remove('active'), 100);
+        if (NOTES[note]) {
+            playNote(NOTES[note], note);
+            
+            // Highlight the key
+            const keyElement = document.querySelector(`[data-note="${note}"]`);
+            if (keyElement) {
+                keyElement.classList.add('active');
+                setTimeout(() => keyElement.classList.remove('active'), 100);
+            }
         }
         
         currentNoteIndex++;
@@ -206,7 +218,7 @@ document.getElementById('searchButton').addEventListener('click', () => {
     const searchResults = document.getElementById('searchResults');
     searchResults.innerHTML = '';
     
-    Object.keys(SONGS).forEach(songName => {
+    Object.keys(window.SONGS).forEach(songName => {
         if (songName.toLowerCase().includes(searchTerm)) {
             const resultItem = document.createElement('div');
             resultItem.className = 'search-result-item';
