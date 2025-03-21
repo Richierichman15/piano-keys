@@ -35,8 +35,14 @@ const KEY_MAPPING = {
 // Initialize Web Audio API
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
+// Store active oscillators
+const activeOscillators = {};
+
 // Function to create and play a note
-function playNote(frequency) {
+function playNote(frequency, key) {
+    // If note is already playing, don't start a new one
+    if (activeOscillators[key]) return;
+
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
@@ -45,13 +51,24 @@ function playNote(frequency) {
     
     // Set up the note envelope
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
     
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
     
     oscillator.start();
-    oscillator.stop(audioContext.currentTime + 1);
+    activeOscillators[key] = { oscillator, gainNode };
+}
+
+// Function to stop a note
+function stopNote(key) {
+    if (activeOscillators[key]) {
+        const { oscillator, gainNode } = activeOscillators[key];
+        gainNode.gain.cancelScheduledValues(audioContext.currentTime);
+        gainNode.gain.setValueAtTime(gainNode.gain.value, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        oscillator.stop(audioContext.currentTime + 0.1);
+        delete activeOscillators[key];
+    }
 }
 
 // Handle keyboard events
@@ -63,7 +80,7 @@ document.addEventListener('keydown', (event) => {
         const keyElement = document.querySelector(`[data-note="${note}"]`);
         if (keyElement) {
             keyElement.classList.add('active');
-            playNote(NOTES[note]);
+            playNote(NOTES[note], key);
         }
     }
 });
@@ -76,6 +93,7 @@ document.addEventListener('keyup', (event) => {
         const keyElement = document.querySelector(`[data-note="${note}"]`);
         if (keyElement) {
             keyElement.classList.remove('active');
+            stopNote(key);
         }
     }
 });
@@ -85,15 +103,19 @@ document.querySelectorAll('.white-key, .black-key').forEach(key => {
     key.addEventListener('mousedown', () => {
         const note = key.getAttribute('data-note');
         key.classList.add('active');
-        playNote(NOTES[note]);
+        playNote(NOTES[note], note);
     });
     
     key.addEventListener('mouseup', () => {
+        const note = key.getAttribute('data-note');
         key.classList.remove('active');
+        stopNote(note);
     });
     
     key.addEventListener('mouseleave', () => {
+        const note = key.getAttribute('data-note');
         key.classList.remove('active');
+        stopNote(note);
     });
     
     // Touch events
@@ -101,10 +123,12 @@ document.querySelectorAll('.white-key, .black-key').forEach(key => {
         e.preventDefault();
         const note = key.getAttribute('data-note');
         key.classList.add('active');
-        playNote(NOTES[note]);
+        playNote(NOTES[note], note);
     });
     
     key.addEventListener('touchend', () => {
+        const note = key.getAttribute('data-note');
         key.classList.remove('active');
+        stopNote(note);
     });
 }); 
