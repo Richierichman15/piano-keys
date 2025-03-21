@@ -157,4 +157,29 @@ button:hover {
 
 .instructions p {
     margin: 0.5rem 0;
+}
+
+#debugButton {
+    background-color: #4e4e4e;
+}
+
+#debugButton:hover {
+    background-color: #333;
+}
+
+#testButton {
+    background-color: #607d8b;
+}
+
+#testButton:hover {
+    background-color: #455a64;
+}
+
+.debug-controls {
+    margin-bottom: 15px;
+}
+
+#toggleDebug {
+    padding: 5px 10px;
+    font-size: 14px;
 } 
