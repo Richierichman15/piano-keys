@@ -182,4 +182,39 @@ button:hover {
 #toggleDebug {
     padding: 5px 10px;
     font-size: 14px;
+}
+
+.ollama-container {
+    margin-bottom: 20px;
+}
+
+.prompt-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    justify-content: center;
+}
+
+#ollamaPrompt {
+    padding: 8px 12px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 400px;
+}
+
+#ollamaButton {
+    background-color: #9c27b0;
+}
+
+#ollamaButton:hover {
+    background-color: #7b1fa2;
+}
+
+#aiButton {
+    background-color: #2196f3;
+}
+
+#aiButton:hover {
+    background-color: #0b7dda;
 } 

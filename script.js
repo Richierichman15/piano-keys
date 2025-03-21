@@ -62,6 +62,10 @@ let playbackInterval = null;
 let isPlaying = false;
 let audioContext = null;
 
+// Ollama LLM integration
+const OLLAMA_ENDPOINT = "http://localhost:11434/api/generate";
+let isOllamaAvailable = false;
+
 // Debug mode
 let debugMode = false;
 let debugLogQueue = [];
@@ -84,6 +88,7 @@ function enableDebugMode() {
             <p>Current Note Index: <span id="currentNoteIdx">0</span>/<span id="totalNotes">0</span></p>
             <p>Current Note: <span id="currentNotePlaying">None</span></p>
             <p>Tempo: <span id="songTempo">0</span>ms</p>
+            <p>Ollama Status: <span id="ollamaStatus">Unknown</span></p>
         </div>
         <div class="debug-logs">
             <h4>Log:</h4>
@@ -136,6 +141,9 @@ function enableDebugMode() {
     });
     
     debugLog('Debug mode enabled', 'info');
+    
+    // Check Ollama status
+    checkOllamaAvailability();
 }
 
 function debugLog(message, type = 'info') {
@@ -217,6 +225,13 @@ function updateDebugDisplay() {
     if (songTempo) {
         songTempo.textContent = currentSong ? currentSong.tempo : '0';
     }
+    
+    // Update Ollama status
+    const ollamaStatus = document.getElementById('ollamaStatus');
+    if (ollamaStatus) {
+        ollamaStatus.textContent = isOllamaAvailable ? 'Available' : 'Unavailable';
+        ollamaStatus.style.color = isOllamaAvailable ? 'green' : 'red';
+    }
 }
 
 // Initialize Web Audio API only after user interaction
@@ -289,28 +304,41 @@ function stopAllNotes() {
 // Function to play a song
 function playSong(songName) {
     // Validate song exists and has required properties
-    if (!songName || !SONG_DATABASE[songName] || !SONG_DATABASE[songName].notes || !SONG_DATABASE[songName].tempo) {
+    if (!songName || !SONG_DATABASE[songName]) {
         debugLog(`Invalid song: ${songName}`, 'error');
         console.error('Invalid song:', songName);
+        return;
+    }
+    
+    // Get the song data
+    const songData = SONG_DATABASE[songName];
+    
+    // Validate song has required properties
+    if (!songData.notes || !songData.tempo) {
+        debugLog(`Song missing notes or tempo: ${songName}`, 'error');
+        console.error('Song missing notes or tempo:', songName);
         return;
     }
     
     // Ensure audio context is initialized
     initAudioContext();
     
-    currentSong = SONG_DATABASE[songName];
+    // Stop any existing playback
+    if (isPlaying) {
+        stopPlayback();
+    }
+    
+    // Set up new playback
+    currentSong = songData;
     currentNoteIndex = 0;
     isPlaying = true;
     
     debugLog(`Starting playback of song: ${songName}`, 'info');
     debugLog(`Song has ${currentSong.notes.length} notes with tempo ${currentSong.tempo}ms`, 'info');
     
-    // Stop any existing playback
-    stopPlayback();
-    
     // Start playing the song
     playbackInterval = setInterval(() => {
-        if (!isPlaying || currentNoteIndex >= currentSong.notes.length) {
+        if (!isPlaying || !currentSong || currentNoteIndex >= currentSong.notes.length) {
             debugLog('Song playback completed or stopped', 'info');
             stopPlayback();
             return;
@@ -341,20 +369,105 @@ function playSong(songName) {
 
 // Function to stop playback
 function stopPlayback() {
-    isPlaying = false;
     if (playbackInterval) {
         clearInterval(playbackInterval);
         playbackInterval = null;
         debugLog('Playback stopped', 'info');
     }
     stopAllNotes();
+    isPlaying = false;
     currentSong = null;
     currentNoteIndex = 0;
     updateDebugDisplay();
 }
 
-// Generate random piano melody using Ollama-like patterns
-function generateAiMelody() {
+// Check if Ollama is available
+function checkOllamaAvailability() {
+    fetch(OLLAMA_ENDPOINT.replace('generate', 'tags'), {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            isOllamaAvailable = true;
+            debugLog('Ollama is available', 'success');
+        } else {
+            isOllamaAvailable = false;
+            debugLog('Ollama is not available', 'error');
+        }
+        updateDebugDisplay();
+    })
+    .catch(error => {
+        isOllamaAvailable = false;
+        debugLog(`Ollama check failed: ${error.message}`, 'error');
+        updateDebugDisplay();
+    });
+}
+
+// Generate piano melody using Ollama
+function generateOllamaMelody(prompt) {
+    if (!isOllamaAvailable) {
+        debugLog('Ollama is not available, using fallback generation', 'error');
+        return generateFallbackMelody();
+    }
+    
+    const model = "tinyllama";  // Use a small model for generation
+    const systemPrompt = "You are a music composition AI. Generate a sequence of piano notes from C, C#, D, D#, E, F, F#, G, G#, A, A#, B, C2. Only respond with a comma-separated list of notes.";
+    
+    const fullPrompt = `${prompt || "Generate a simple melody"}. Return only notes separated by commas, choose from these notes: C, C#, D, D#, E, F, F#, G, G#, A, A#, B, C2`;
+    
+    debugLog(`Asking Ollama to generate melody with prompt: ${prompt}`, 'info');
+    
+    return new Promise((resolve, reject) => {
+        fetch(OLLAMA_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: model,
+                prompt: fullPrompt,
+                system: systemPrompt,
+                stream: false
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            debugLog('Received response from Ollama', 'success');
+            
+            // Process the response to extract notes
+            let notesText = data.response || "";
+            
+            // Clean up the response to extract just the notes
+            notesText = notesText.replace(/[^A-G#0-9,\s]/g, '').trim();
+            const notesArray = notesText.split(/[\s,]+/).filter(note => 
+                note && Object.keys(NOTES).includes(note)
+            );
+            
+            if (notesArray.length === 0) {
+                debugLog('No valid notes found in Ollama response, using fallback', 'error');
+                resolve(generateFallbackMelody());
+            } else {
+                debugLog(`Generated ${notesArray.length} notes from Ollama`, 'success');
+                
+                // Return song object
+                resolve({
+                    notes: notesArray,
+                    tempo: 400  // Default tempo
+                });
+            }
+        })
+        .catch(error => {
+            debugLog(`Ollama request failed: ${error.message}`, 'error');
+            resolve(generateFallbackMelody());
+        });
+    });
+}
+
+// Generate fallback melody when Ollama is not available
+function generateFallbackMelody() {
     const noteOptions = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
     const patterns = [
         // Ascending scale
@@ -378,7 +491,7 @@ function generateAiMelody() {
     }
     
     const tempo = 300 + Math.floor(Math.random() * 300); // Random tempo between 300-600ms
-    debugLog(`Generated AI melody with ${generatedNotes.length} notes and tempo ${tempo}ms`, 'info');
+    debugLog(`Generated fallback melody with ${generatedNotes.length} notes and tempo ${tempo}ms`, 'info');
     
     return {
         notes: generatedNotes,
@@ -387,23 +500,36 @@ function generateAiMelody() {
 }
 
 // Play AI generated melody
-function playAiGenerated() {
-    const generatedSong = generateAiMelody();
-    currentSong = generatedSong;
-    currentNoteIndex = 0;
-    isPlaying = true;
-    
+async function playAiGenerated(prompt) {
     // Ensure audio context is initialized
     initAudioContext();
     
     // Stop any existing playback
-    stopPlayback();
+    if (isPlaying) {
+        stopPlayback();
+    }
+    
+    debugLog('Generating AI melody...', 'info');
+    let generatedSong;
+    
+    try {
+        // Try to use Ollama for generation
+        generatedSong = await generateOllamaMelody(prompt);
+    } catch (e) {
+        debugLog(`Error generating melody: ${e.message}, using fallback`, 'error');
+        generatedSong = generateFallbackMelody();
+    }
+    
+    // Set up new playback
+    currentSong = generatedSong;
+    currentNoteIndex = 0;
+    isPlaying = true;
     
     debugLog('Starting AI generated melody playback', 'info');
     
     // Start playing the song
     playbackInterval = setInterval(() => {
-        if (!isPlaying || currentNoteIndex >= currentSong.notes.length) {
+        if (!isPlaying || !currentSong || currentNoteIndex >= currentSong.notes.length) {
             debugLog('AI melody playback completed or stopped', 'info');
             stopPlayback();
             return;
@@ -462,7 +588,7 @@ function runPlaybackTest() {
                     
                     // Test 4: AI melody
                     try {
-                        playAiGenerated();
+                        playAiGenerated("Test melody");
                         debugLog('✓ AI melody playback started', 'success');
                         
                         // Stop after 3 seconds
@@ -486,6 +612,9 @@ function runPlaybackTest() {
 
 // Initialize event listeners when document is ready
 document.addEventListener('DOMContentLoaded', () => {
+    // Check Ollama availability at startup
+    checkOllamaAvailability();
+    
     // Handle keyboard events for piano keys
     document.addEventListener('keydown', (event) => {
         // Initialize audio context on first user interaction
@@ -573,7 +702,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('stopButton').addEventListener('click', stopPlayback);
 
-    // Add AI button for Ollama integration
+    // Create Ollama LLM prompt interface
+    const ollamaContainer = document.createElement('div');
+    ollamaContainer.className = 'ollama-container';
+    ollamaContainer.innerHTML = `
+        <div class="prompt-container">
+            <input type="text" id="ollamaPrompt" placeholder="Enter prompt for AI melody (e.g., 'happy jazz tune')">
+            <button id="ollamaButton">Create with Ollama</button>
+        </div>
+    `;
+    
+    document.querySelector('.container').insertBefore(ollamaContainer, document.querySelector('.piano'));
+    
+    // Add Ollama button listener
+    document.getElementById('ollamaButton').addEventListener('click', () => {
+        // Initialize audio context on first user interaction
+        initAudioContext();
+        
+        const prompt = document.getElementById('ollamaPrompt').value || "Create a melody";
+        playAiGenerated(prompt);
+    });
+    
+    // Add regular AI button for fallback
     const playbackControls = document.querySelector('.playback-controls');
     const aiButton = document.createElement('button');
     aiButton.id = 'aiButton';
